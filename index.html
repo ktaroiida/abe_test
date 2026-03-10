@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wildlife Guardian | 鳥獣被害報告ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --forest-deep: #064e3b;
+            --forest-light: #10b981;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #020617;
+            background-image:
+                radial-gradient(circle at 0% 0%, rgba(6, 78, 59, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            color: #f8fafc;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+        }
+
+        .recording-wave {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .wave-bar {
+            width: 3px;
+            height: 8px;
+            background: var(--forest-light);
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                height: 8px;
+            }
+
+            50% {
+                height: 24px;
+            }
+        }
+
+        textarea::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-active {
+            transform: scale(0.98);
+        }
+
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+
+            100% {
+                background-position: 200% 0;
+            }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row items-center justify-between gap-4 glass p-6 rounded-3xl">
+            <div class="flex items-center gap-4">
+                <div
+                    class="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-emerald-900/20">
+                    🐗</div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight text-emerald-400">Wildlife Guardian</h1>
+                    <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Field Reporting System v2.0
+                    </p>
+                </div>
+            </div>
+            <div id="diag-indicator" class="flex gap-2 text-[10px] font-bold">
+                <span id="secure-badge" class="px-2 py-1 rounded-md glass text-slate-500">HTTPS CHECK</span>
+                <span id="mic-badge" class="px-2 py-1 rounded-md glass text-slate-500">MIC CHECK</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="grid grid-cols-1 gap-6">
+            <div class="relative group">
+                <div
+                    class="absolute -inset-1 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-3xl blur opacity-10 group-focus-within:opacity-20 transition duration-500">
+                </div>
+                <div class="relative glass rounded-3xl overflow-hidden">
+                    <div class="flex items-center justify-between px-6 py-3 border-b border-white/5 bg-white/5">
+                        <span class="text-xs font-bold text-emerald-400 flex items-center gap-2">
+                            <span id="recording-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                            <span id="recording-status-text">DISCONNECTED</span>
+                        </span>
+                        <div id="visualizer" class="recording-wave hidden">
+                            <div class="wave-bar" style="animation-delay: 0.1s"></div>
+                            <div class="wave-bar" style="animation-delay: 0.2s"></div>
+                            <div class="wave-bar" style="animation-delay: 0.3s"></div>
+                            <div class="wave-bar" style="animation-delay: 0.4s"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-500 font-mono" id="char-count">0 CHARS</span>
+                    </div>
+
+                    <textarea id="main-editor"
+                        class="w-full h-[50vh] p-8 bg-transparent text-xl leading-relaxed focus:outline-none resize-none transition-all placeholder:italic"
+                        placeholder="報告内容を入力するか、録音ボタンを押して話し始めてください..."></textarea>
+
+                    <div id="interim-text"
+                        class="absolute bottom-6 left-8 right-8 text-emerald-500/60 text-lg italic pointer-events-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Action Bar -->
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="toggle-record-btn"
+                    class="flex-[3] relative overflow-hidden group py-6 px-10 rounded-2xl bg-emerald-600 hover:bg-emerald-500 transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-4 text-white font-black text-xl shadow-xl shadow-emerald-950/20">
+                    <span id="record-icon">🎤</span>
+                    <span id="record-text">報告を開始する</span>
+                </button>
+
+                <div class="flex flex-1 gap-4">
+                    <button id="save-btn"
+                        class="flex-1 glass hover:bg-white/10 p-5 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 group">
+                        <span class="text-xl group-hover:scale-110 transition-transform">💾</span>
+                        <span class="text-[10px] font-bold text-slate-400">SAVE</span>
+                    </button>
+                    <button id="clear-btn"
+                        class="flex-1 glass hover:bg-red-500/10 p-5 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 group">
+                        <span class="text-xl group-hover:scale-110 transition-transform">🗑️</span>
+                        <span class="text-[10px] font-bold text-slate-400">CLEAR</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Diagnostics & Help Container -->
+        <footer class="glass rounded-3xl p-6 space-y-4">
+            <div id="alert-zone"></div>
+            <div class="flex items-start gap-4 text-slate-400">
+                <span class="text-xl">💡</span>
+                <p class="text-xs leading-relaxed">
+                    <strong class="text-slate-200">安定稼働のために:</strong>
+                    音声入力は一定期間（約1分）沈黙が続くと自動で停止しますが、本ツールはそれを検知して<span
+                        class="text-emerald-400">自動で再開</span>するように設計されています。誤動作を防ぐため、話し終わったら必ず停止ボタンを押してください。
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Feedback Toast -->
+    <div id="toast"
+        class="fixed bottom-10 left-1/2 -translate-x-1/2 glass px-6 py-3 rounded-full text-sm font-bold opacity-0 transition-all duration-300 pointer-events-none z-50">
+    </div>
+
+    <script>
+        /**
+         * Core Logic: Wildlife Guardian v2
+         */
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        // DOM Elements
+        const editor = document.getElementById('main-editor');
+        const interimDisplay = document.getElementById('interim-text');
+        const toggleBtn = document.getElementById('toggle-record-btn');
+        const btnText = document.getElementById('record-text');
+        const btnIcon = document.getElementById('record-icon');
+        const statusDot = document.getElementById('recording-status-dot');
+        const statusText = document.getElementById('recording-status-text');
+        const visualizer = document.getElementById('visualizer');
+        const charCountDisplay = document.getElementById('char-count');
+        const toast = document.getElementById('toast');
+        const alertZone = document.getElementById('alert-zone');
+
+        // State Variables
+        let recognition = null;
+        let isRecording = false;
+        let isForceStop = false;
+        let finalTranscript = '';
+
+        // --- Diagnostics ---
+        function runDiagnostics() {
+            const isSecure = window.isSecureContext;
+            const isFile = window.location.protocol === 'file:';
+            const secureBadge = document.getElementById('secure-badge');
+
+            if (isFile) {
+                renderAlert('⚠️ ファイルを直接開いています。音声認識を利用するには GitHub にアップロードするか localhost で実行してください。', 'error');
+                secureBadge.className = 'px-2 py-1 rounded-md glass text-red-500 border border-red-500/30';
+                secureBadge.innerText = 'LOCAL FILE: RESTRICTED';
+            } else if (!isSecure) {
+                renderAlert('⚠️ セキュリティ保護（HTTPS）がありません。音声機能が制限されます。', 'error');
+                secureBadge.className = 'px-2 py-1 rounded-md glass text-orange-500 border border-orange-500/30';
+            } else {
+                secureBadge.className = 'px-2 py-1 rounded-md glass text-emerald-500 border border-emerald-500/30';
+                secureBadge.innerText = 'SECURE CONTEXT: OK';
+            }
+
+            if (!SpeechRecognition) {
+                renderAlert('❌ ご利用のブラウザは音声認識に対応していません。Chrome または Safari を推奨します。', 'error');
+                toggleBtn.disabled = true;
+                toggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function renderAlert(msg, type) {
+            const div = document.createElement('div');
+            div.className = `p-4 rounded-xl text-xs font-bold border ${type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`;
+            div.innerText = msg;
+            alertZone.appendChild(div);
+        }
+
+        function showToast(msg) {
+            toast.innerText = msg;
+            toast.classList.replace('opacity-0', 'opacity-100');
+            toast.classList.add('-translate-y-4');
+            setTimeout(() => {
+                toast.classList.replace('opacity-100', 'opacity-0');
+                toast.classList.remove('-translate-y-4');
+            }, 3000);
+        }
+
+        // --- Speech Logic ---
+        function initRecognition() {
+            if (!SpeechRecognition) return;
+
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP';
+            recognition.interimResults = true;
+            recognition.continuous = true;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                updateUI(true);
+            };
+
+            recognition.onend = () => {
+                // 自動停止を検知し、強制停止でなければ再起動
+                if (!isForceStop && isRecording) {
+                    console.log('Detected auto-stop. Restarting...');
+                    recognition.start();
+                } else {
+                    updateUI(false);
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech Error:', event.error);
+                if (event.error === 'not-allowed') {
+                    renderAlert('❌ マイクの使用が拒否されました。設定を確認してください。', 'error');
+                    isRecording = false;
+                    isForceStop = true;
+                }
+                // コンサバに再起動を試みる
+                if (event.error === 'network' && isRecording) {
+                    setTimeout(() => recognition.start(), 2000);
+                }
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                editor.value = finalTranscript + interimTranscript;
+                interimDisplay.innerText = interimTranscript;
+                editor.scrollTop = editor.scrollHeight;
+                updateCharCount();
+            };
+        }
+
+        function updateUI(active) {
+            if (active) {
+                btnText.innerText = '録音を停止・確定する';
+                btnIcon.innerText = '⏹️';
+                toggleBtn.classList.replace('bg-emerald-600', 'bg-red-600');
+                toggleBtn.classList.replace('hover:bg-emerald-500', 'hover:bg-red-500');
+                statusDot.classList.replace('bg-slate-500', 'bg-red-500');
+                statusDot.classList.add('animate-pulse');
+                statusText.innerText = 'RECORDING NOW';
+                statusText.classList.replace('text-slate-500', 'text-red-400');
+                visualizer.classList.remove('hidden');
+            } else {
+                btnText.innerText = '報告を開始する';
+                btnIcon.innerText = '🎤';
+                toggleBtn.classList.replace('bg-red-600', 'bg-emerald-600');
+                toggleBtn.classList.replace('hover:bg-red-500', 'hover:bg-emerald-500');
+                statusDot.classList.replace('bg-red-500', 'bg-slate-500');
+                statusDot.classList.remove('animate-pulse');
+                statusText.innerText = 'READY';
+                statusText.classList.replace('text-red-400', 'text-slate-500');
+                visualizer.classList.add('hidden');
+                interimDisplay.innerText = '';
+            }
+        }
+
+        function updateCharCount() {
+            charCountDisplay.innerText = `${editor.value.length} CHARS`;
+        }
+
+        // --- Lifecycle ---
+        document.addEventListener('DOMContentLoaded', () => {
+            runDiagnostics();
+            initRecognition();
+
+            // Load from LocalStorage
+            const saved = localStorage.getItem('wc_draft');
+            if (saved) {
+                editor.value = saved;
+                finalTranscript = saved;
+                updateCharCount();
+            }
+
+            // Auto-Save
+            setInterval(() => {
+                localStorage.setItem('wc_draft', editor.value);
+            }, 5000);
+        });
+
+        // --- Event Listeners ---
+        toggleBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                isForceStop = false;
+                recognition.start();
+                if (editor.value === '') {
+                    finalTranscript = `--- 報告時刻: ${new Date().toLocaleString('ja-JP')} ---\n`;
+                    editor.value = finalTranscript;
+                }
+            } else {
+                isForceStop = true;
+                isRecording = false;
+                recognition.stop();
+            }
+        });
+
+        editor.addEventListener('input', () => {
+            finalTranscript = editor.value;
+            updateCharCount();
+        });
+
+        document.getElementById('save-btn').addEventListener('click', () => {
+            if (!editor.value.trim()) return;
+            const now = new Date();
+            const fileName = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_FieldReport.txt`;
+            const blob = new Blob([editor.value], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            showToast('📂 ファイルを保存しました');
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            if (confirm('現在の内容をすべて削除しますか？')) {
+                editor.value = '';
+                finalTranscript = '';
+                localStorage.removeItem('wc_draft');
+                updateCharCount();
+                showToast('🗑️ クリアしました');
+            }
+        });
+    </script>
+</body>
+
+</html>
