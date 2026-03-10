@@ -245,43 +245,48 @@
         }
 
         // --- Speech Logic ---
-        function initRecognition() {
-            if (!SpeechRecognition) return;
+        function createRecognition() {
+            if (!SpeechRecognition) return null;
+            
+            const rec = new SpeechRecognition();
+            rec.lang = 'ja-JP';
+            rec.interimResults = true;
+            rec.continuous = false; // iOS安定性のためにfalseに設定
 
-            recognition = new SpeechRecognition();
-            recognition.lang = 'ja-JP';
-            recognition.interimResults = true;
-            recognition.continuous = true;
-
-            recognition.onstart = () => {
+            rec.onstart = () => {
                 isRecording = true;
                 updateUI(true);
+                console.log('Recognition started');
+                renderAlert('✨ 認識中...', 'info');
             };
 
-            recognition.onend = () => {
-                // 自動停止を検知し、強制停止でなければ再起動
+            rec.onend = () => {
+                console.log('Recognition ended');
+                // 強制停止でなければ再起動して連続性を模倣
                 if (!isForceStop && isRecording) {
-                    console.log('Detected auto-stop. Restarting...');
-                    recognition.start();
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error('Restart failed:', e);
+                        updateUI(false);
+                    }
                 } else {
                     updateUI(false);
                 }
             };
 
-            recognition.onerror = (event) => {
+            rec.onerror = (event) => {
                 console.error('Speech Error:', event.error);
                 if (event.error === 'not-allowed') {
-                    renderAlert('❌ マイクの使用が拒否されました。設定を確認してください。', 'error');
+                    renderAlert('❌ マイクの使用が拒否されました。', 'error');
                     isRecording = false;
                     isForceStop = true;
-                }
-                // コンサバに再起動を試みる
-                if (event.error === 'network' && isRecording) {
-                    setTimeout(() => recognition.start(), 2000);
+                } else if (event.error === 'network') {
+                    renderAlert('🌐 ネットワークエラー。接続を確認してください。', 'error');
                 }
             };
 
-            recognition.onresult = (event) => {
+            rec.onresult = (event) => {
                 let interimTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
@@ -296,6 +301,8 @@
                 editor.scrollTop = editor.scrollHeight;
                 updateCharCount();
             };
+
+            return rec;
         }
 
         function updateUI(active) {
@@ -330,9 +337,8 @@
         // --- Lifecycle ---
         document.addEventListener('DOMContentLoaded', () => {
             runDiagnostics();
-            initRecognition();
+            // インスタンスはクリック時に生成するように変更
 
-            // Load from LocalStorage
             const saved = localStorage.getItem('wc_draft');
             if (saved) {
                 editor.value = saved;
@@ -340,7 +346,6 @@
                 updateCharCount();
             }
 
-            // Auto-Save
             setInterval(() => {
                 localStorage.setItem('wc_draft', editor.value);
             }, 5000);
@@ -350,10 +355,22 @@
         toggleBtn.addEventListener('click', () => {
             if (!isRecording) {
                 isForceStop = false;
-                recognition.start();
-                if (editor.value === '') {
-                    finalTranscript = `--- 報告時刻: ${new Date().toLocaleString('ja-JP')} ---\n`;
-                    editor.value = finalTranscript;
+                // iOSのためにクリックごとに新しく生成/再設定
+                if (!recognition) {
+                    recognition = createRecognition();
+                }
+                
+                try {
+                    recognition.start();
+                    if (editor.value === '') {
+                        finalTranscript = `--- 報告時刻: ${new Date().toLocaleString('ja-JP')} ---\n`;
+                        editor.value = finalTranscript;
+                    }
+                } catch (e) {
+                    console.error('Initial manual start failed:', e);
+                    // 既に走っている場合は一度止める
+                    recognition.abort();
+                    setTimeout(() => recognition.start(), 100);
                 }
             } else {
                 isForceStop = true;
